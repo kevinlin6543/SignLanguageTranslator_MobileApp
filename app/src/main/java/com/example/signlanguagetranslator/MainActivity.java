@@ -14,9 +14,18 @@ import android.graphics.RectF;
 import android.media.Image;
 import android.os.Bundle;
 
+import com.google.android.gms.tasks.OnFailureListener;
+import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.snackbar.Snackbar;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.storage.FileDownloadTask;
+import com.google.firebase.storage.FirebaseStorage;
+import com.google.firebase.storage.StorageReference;
+import com.madhavanmalolan.ffmpegandroidlibrary.Controller;
 
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
 
@@ -38,14 +47,19 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import java.io.BufferedOutputStream;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.URL;
+import java.net.URLConnection;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -54,7 +68,13 @@ import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.UUID;
+import java.io.File;
 
+import org.opencv.android.OpenCVLoader;
+import org.opencv.core.Mat;
+import org.opencv.imgcodecs.Imgcodecs;
+import org.opencv.videoio.VideoCapture;
+import org.opencv.videoio.Videoio;
 import org.tensorflow.lite.DataType;
 import org.tensorflow.lite.Interpreter;
 import org.tensorflow.lite.support.common.FileUtil;
@@ -97,6 +117,8 @@ public class MainActivity extends AppCompatActivity {
     private TensorProcessor probabilityProcessor;
     private static final float PROBABILITY_MEAN = 0.0f;
     private static final float PROBABILITY_STD = 255.0f;
+    File videoFile;
+    FirebaseStorage storage;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -104,7 +126,7 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
         Toolbar toolbar = findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
-
+        OpenCVLoader.initDebug();
         try{
             tflite = new Interpreter(loadModelFile(MainActivity.this));
         } catch (IOException e){
@@ -139,6 +161,10 @@ public class MainActivity extends AppCompatActivity {
             Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
             startActivityForResult(enableBtIntent, REQUEST_ENABLE_BT);
         }
+        storage = FirebaseStorage.getInstance();
+        FirebaseAuth mAuth = FirebaseAuth.getInstance();
+        FirebaseUser user = mAuth.getCurrentUser();
+        mAuth.signInAnonymously();
     }
 
     void connectServer(View v) {
@@ -199,6 +225,122 @@ public class MainActivity extends AppCompatActivity {
                 });
             }
         });
+    }
+
+    public void testGCS(View view) throws IOException {
+        // Create a storage reference from our app
+        StorageReference storageRef = storage.getReference();
+
+        // Create a reference with an initial file path and name
+        //StorageReference pathReference = storageRef.child("images/stars.jpg");
+
+        // Create a reference to a file from a Google Cloud Storage URI
+        //StorageReference gsReference = storage.getReferenceFromURI("gs://precise-airship-267920/videos/test_blob");
+        //StorageReference gsReference = storage.getReferenceFromUrl("https://storage.cloud.google.com/precise-airship-267920.appspot.com/videos/test_blob.h264");
+        System.out.println("Started Download");
+        //File testFile = File.createTempFile("blob", ".h264", getCacheDir());
+        File testFile = new File(getCacheDir() + "/blob.h264");
+        StorageReference testRef = storageRef.child("videos/test_blob.h264");
+        //File video = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "video.h264");
+        /*
+        File localFile = new File(getFilesDir()+ "/Download/" ,"video.h264"); //File.createTempFile("video", "h264", Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS));
+        localFile.mkdirs();
+        downloadFile(
+                "https://storage.cloud.google.com/precise-airship-267920/videos/test_blob.h264", localFile);
+        System.out.println(localFile.getAbsoluteFile());
+        long temp = localFile.length();
+        System.out.println(temp);
+        */
+        //localFile.mkdirs();
+        testRef.getFile(testFile).addOnSuccessListener(new OnSuccessListener<FileDownloadTask.TaskSnapshot>() {
+            @Override
+            public void onSuccess(FileDownloadTask.TaskSnapshot taskSnapshot) {
+                // Local temp file has been created
+                System.out.println("Downloaded");
+                System.out.println(getCacheDir());
+                System.out.println("Copied");
+                System.out.println(testFile.length());
+                videoFile = testFile;
+                videoToImages(videoFile);
+            }
+        }).addOnFailureListener(new OnFailureListener() {
+            @Override
+            public void onFailure(@NonNull Exception exception) {
+                // Handle any errors
+                System.out.println("Failed Download");
+            }
+        });
+    }
+
+    public void videoToImages(File video){
+        String outputPath = getCacheDir().getAbsolutePath() + "/SLAB/$filename%03d.bmp";
+        System.out.println(outputPath);
+        Controller.getInstance().run(new String[]{
+                "-i",
+                video.getAbsolutePath(),
+                "-r",
+                "1/1",
+                outputPath
+
+        });
+        String dir = getCacheDir().toString() + "/SLAB";
+        File directory = new File(dir);
+        File[] files = directory.listFiles();
+        for(int i = 0; i < files.length; i++){
+            System.out.println(files[i].getName());
+        }
+
+        /*int frameNum = 0;
+        VideoCapture cap = new VideoCapture();
+        String inputFile = video.getAbsolutePath();
+        String outputFile = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS) + "/testIm";
+        System.out.println(inputFile);
+        cap.open(inputFile);
+        int video_length = (int) cap.get(Videoio.CAP_PROP_FRAME_COUNT);
+        int frames_per_second = (int) cap.get(Videoio.CAP_PROP_FPS);
+        int frame_number = (int) cap.get(Videoio.CAP_PROP_POS_FRAMES);
+
+        Mat frame = new Mat();
+
+        if (cap.isOpened())
+        {
+            System.err.println("Video is opened");
+            System.err.println("Number of Frames: " + video_length);
+            System.err.println(frames_per_second + " Frames per Second");
+            System.err.println("Converting Video...");
+
+            while(cap.read(frame)) //the last frame of the movie will be invalid. check for it !
+            {
+                Imgcodecs.imwrite(outputFile + "/" + frame_number +".jpg", frame);
+                frame_number++;
+            }
+            cap.release();
+        }*/
+
+    }
+
+    private static void downloadFile(String url, File outputFile) {
+        try {
+            URL u = new URL(url);
+            URLConnection conn = u.openConnection();
+            int contentLength = conn.getContentLength();
+            System.out.println("download" + contentLength);
+            DataInputStream stream = new DataInputStream(u.openStream());
+
+            byte[] buffer = new byte[contentLength];
+            stream.readFully(buffer);
+            stream.close();
+
+            DataOutputStream fos = new DataOutputStream(new FileOutputStream(outputFile));
+            fos.write(buffer);
+            fos.flush();
+            fos.close();
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            System.out.println("we dumb");
+
+        }
     }
 
 
@@ -278,7 +420,7 @@ public class MainActivity extends AppCompatActivity {
         AssetFileDescriptor fileDescriptor = activity.getAssets().openFd("letter_net.tflite");
         labels = FileUtil.loadLabels(activity, "labels.txt");
         try{
-            istr = activity.getAssets().open("image0.jpg");
+            istr = activity.getAssets().open("L.jpg");
             image = BitmapFactory.decodeStream(istr);
         } catch (IOException e){
             e.printStackTrace();
@@ -429,11 +571,31 @@ public class MainActivity extends AppCompatActivity {
         }
 
         public void run() {
+            mmBuffer = new byte[1024];
             int numBytes;
             btAdapter.cancelDiscovery();
             System.out.println("RUNNING");
             try{
                 mmSocket.connect();
+            } catch (IOException e){
+                e.printStackTrace();
+            }
+            while(true){
+                try {
+                    // Read from the InputStream.
+                    numBytes = mmInStream.read(mmBuffer);
+                    // Send the obtained bytes to the UI activity.
+                    String s = new String(mmBuffer, StandardCharsets.UTF_8);
+                    System.out.println(s);
+                } catch (IOException e) {
+                    Log.d(TAG, "Input stream was disconnected", e);
+                    break;
+                }
+
+            }
+            /*try{
+                mmSocket.connect();
+                mmBuffer = new byte[1024];
                 while(true){
                     numBytes = mmInStream.read(mmBuffer);
                     if(mmBuffer != null){
@@ -454,9 +616,9 @@ public class MainActivity extends AppCompatActivity {
                 } catch (IOException closeException) {
                     Log.e(TAG, "Could not close the client socket", closeException);
                 }
-                return;*/
+                return;
 
-            }
+            }*/
         }
 
         public void write(byte[] bytes) {
@@ -534,6 +696,7 @@ public class MainActivity extends AppCompatActivity {
 
         }
     }
+
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data){

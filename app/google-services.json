@@ -1,0 +1,40 @@
+{
+  "project_info": {
+    "project_number": "399821261559",
+    "firebase_url": "https://precise-airship-267920.firebaseio.com",
+    "project_id": "precise-airship-267920",
+    "storage_bucket": "precise-airship-267920.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:399821261559:android:da25cdfae10800e4d261f2",
+        "android_client_info": {
+          "package_name": "com.example.signlanguagetranslator"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "399821261559-4furjlsrlnjnsr518iuqm3f8qfu82ig6.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCCgU2EbDv4LxjPvAjUodbSJ5E2FuBTzho"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "399821261559-4furjlsrlnjnsr518iuqm3f8qfu82ig6.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
